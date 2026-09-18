@@ -1,0 +1,32 @@
+## Smart Home GitOps — .gitignore
+## ─────────────────────────────────────────────────────────────────────────────
+
+# ── CRITICAL: Never commit secrets! ─────────────────────────────────────────
+local.properties        # Contains GITHUB_TOKEN — MUST stay local
+*.keystore
+*.jks
+keystore.properties
+
+# ── Gradle build outputs ─────────────────────────────────────────────────────
+.gradle/
+build/
+app/build/
+
+# ── Android Studio ───────────────────────────────────────────────────────────
+*.iml
+.idea/
+*.idea/
+.DS_Store
+captures/
+.externalNativeBuild/
+.cxx/
+
+# ── Kotlin / Java ────────────────────────────────────────────────────────────
+*.class
+*.log
+out/
+
+# ── OS generated ─────────────────────────────────────────────────────────────
+Thumbs.db
+.DS_Store
+java_pid*.hprof
