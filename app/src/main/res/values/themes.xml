@@ -1,0 +1,9 @@
+<resources>
+    <!-- Base application theme — Compose handles most styling, this is for the splash/window bg -->
+    <style name="Theme.SmartHomeGitOps" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@android:color/black</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowLightStatusBar">false</item>
+    </style>
+</resources>

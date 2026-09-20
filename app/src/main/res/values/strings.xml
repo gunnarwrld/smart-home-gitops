@@ -1,0 +1,11 @@
+<resources>
+    <string name="app_name">Smart Home GitOps</string>
+    <string name="normal_state_title">All Systems Nominal</string>
+    <string name="alert_state_title">⚠ Security Alert Detected</string>
+    <string name="confidence_score_label">Deception Confidence Score</string>
+    <string name="polling_status_label">Polling GitHub API…</string>
+    <string name="last_updated_label">Last checked</string>
+    <string name="no_pr_label">No active Pull Requests</string>
+    <string name="raw_comment_label">Adversarial Comment Detected</string>
+    <string name="patterns_label">Matched Threat Patterns</string>
+</resources>
