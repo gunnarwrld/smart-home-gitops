@@ -1,6 +1,6 @@
 <div align="center">
 
-# 🏠 Smart Home GitOps
+# 🏠 Smart Home GitOp
 
 ### An Android security monitor that detects AI-driven adversarial attacks on infrastructure-as-code repositories in real time — and lets you shut them down.
 
