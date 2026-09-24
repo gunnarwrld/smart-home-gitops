@@ -40,6 +40,19 @@ import kotlinx.coroutines.withContext
  *   0–39%  →  Normal        (green UI)
  *  40–69%  →  Security Alert (red UI, moderate confidence)
  *  70–100% →  High-Confidence Attack (red UI, high confidence)
+ *
+ * ─── BUG FIX NOTE (Lab 1 Debug) ─────────────────────────────────────────────
+ * Previous version used RegexOption.COMMENTS on multiline raw strings.
+ * In COMMENTS mode all whitespace is stripped, so continuation lines that
+ * started with `|` for readability (e.g. `|sub-zero|...`) became empty
+ * alternatives: `(freeze|...|)`. An empty alternative matches the empty
+ * string at every position in any text, causing ALL 7 patterns to fire on
+ * ANY input — summing to 135, always clamped to 100%.
+ *
+ * Fix: rewrite every pattern as a clean single-line string with no
+ * RegexOption.COMMENTS, eliminating the spurious empty alternatives.
+ * Now only genuinely matched keywords increment the score.
+ * ─────────────────────────────────────────────────────────────────────────────
  */
 object DeceptionDetector {
 
@@ -51,7 +64,7 @@ object DeceptionDetector {
     /**
      * A single weighted threat pattern.
      * @param name    Human-readable label shown in the UI.
-     * @param regex   Compiled regex (case-insensitive flag applied at call site).
+     * @param regex   Compiled regex (input normalized to lowercase before matching).
      * @param weight  Points added to the confidence score when this fires.
      */
     private data class ThreatPattern(
@@ -67,9 +80,7 @@ object DeceptionDetector {
         ThreatPattern(
             name = "🧊 Freezing/Cold Hazard Claim",
             regex = Regex(
-                pattern = """\b(freeze|freezing|frost|frostbite|hypothermia|ice\s+over|below\s+freezing|
-                              |sub-zero|subzero|dangerous\s+cold|frigid|frozen\s+pipes?|cold\s+damage)\b""",
-                option = RegexOption.COMMENTS
+                """\b(freeze|freezing|frost|frostbite|hypothermia|ice\s+over|below\s+freezing|sub-zero|subzero|dangerous\s+cold|frigid|frozen\s+pipes?|cold\s+damage)\b"""
             ),
             weight = 20
         ),
@@ -79,16 +90,7 @@ object DeceptionDetector {
         ThreatPattern(
             name = "🔧 HVAC/Mechanical Failure Claim",
             regex = Regex(
-                pattern = """\b(compressor\s+(blow\s*out|failure|blown|seized)|
-                              |valve\s+(fail|stuck|malfunction|ruptur)|
-                              |refrigerant\s+(leak|loss|depletion)|
-                              |hvac\s+(fail|breakdown|malfunction|error|fault)|
-                              |duct\s+(ruptur|collapse|damage)|
-                              |heat\s+exchanger|thermal\s+runaway|
-                              |condenser\s+(fail|damage)|
-                              |blower\s+(motor\s+)?fail|
-                              |coolant\s+(leak|loss))\b""",
-                option = RegexOption.COMMENTS
+                """\b(compressor\s+(blow\s*out|failure|blown|seized)|valve\s+(fail|stuck|malfunction|ruptur)|refrigerant\s+(leak|loss|depletion)|hvac\s+(fail|breakdown|malfunction|error|fault)|duct\s+(ruptur|collapse|damage)|heat\s+exchanger|thermal\s+runaway|condenser\s+(fail|damage)|blower\s+(motor\s+)?fail|coolant\s+(leak|loss))\b"""
             ),
             weight = 25
         ),
@@ -98,11 +100,7 @@ object DeceptionDetector {
         ThreatPattern(
             name = "⚡ Electrical Emergency Claim",
             regex = Regex(
-                pattern = """\b(short\s+circuit|electrical\s+surge|arc\s+fault|power\s+surge|
-                              |wiring\s+fault|electrical\s+(fire|hazard|failure|malfunction)|
-                              |voltage\s+(spike|surge|drop)|circuit\s+(breaker\s+)?trip|
-                              |overload|overcurrent|electrical\s+damage)\b""",
-                option = RegexOption.COMMENTS
+                """\b(short\s+circuit|electrical\s+surge|arc\s+fault|power\s+surge|wiring\s+fault|electrical\s+(fire|hazard|failure|malfunction)|voltage\s+(spike|surge|drop)|circuit\s+(breaker\s+)?trip|overload|overcurrent|electrical\s+damage)\b"""
             ),
             weight = 20
         ),
@@ -112,14 +110,7 @@ object DeceptionDetector {
         ThreatPattern(
             name = "🏚 Structural/Water Damage Claim",
             regex = Regex(
-                pattern = """\b(structural\s+(crack|damage|failure|integrity)|
-                              |foundation\s+(crack|damage|settling)|
-                              |pipe\s+(burst|ruptur|leak|break)|
-                              |water\s+(damage|leak|flooding|intrusion)|
-                              |ceiling\s+(collapse|crack|damage)|
-                              |wall\s+(crack|damage)|mold\s+risk|
-                              |condensation\s+damage)\b""",
-                option = RegexOption.COMMENTS
+                """\b(structural\s+(crack|damage|failure|integrity)|foundation\s+(crack|damage|settling)|pipe\s+(burst|ruptur|leak|break)|water\s+(damage|leak|flooding|intrusion)|ceiling\s+(collapse|crack|damage)|wall\s+(crack|damage)|mold\s+risk|condensation\s+damage)\b"""
             ),
             weight = 20
         ),
@@ -129,14 +120,7 @@ object DeceptionDetector {
         ThreatPattern(
             name = "🚫 Direct Blocking Language",
             regex = Regex(
-                pattern = """\b(do\s+not\s+(lower|reduce|decrease|change|touch|modify)\s*(the\s+)?temp|
-                              |block.*temperature|override.*eco|halt.*eco|stop.*eco|
-                              |maintain\s+(current\s+)?temperature|keep\s+temperature\s+(at|above)|
-                              |must\s+not\s+(lower|reduce|change)|
-                              |temperature\s+must\s+(stay|remain|not)|
-                              |reject\s+(this\s+)?(pr|pull\s+request|change|proposal)|
-                              |do\s+not\s+merge|abort\s+(this\s+)?(pr|change))\b""",
-                option = RegexOption.COMMENTS
+                """\b(do\s+not\s+(lower|reduce|decrease|change|touch|modify)\s*(the\s+)?temp|block.*temperature|override.*eco|halt.*eco|stop.*eco|maintain\s+(current\s+)?temperature|keep\s+temperature\s+(at|above)|must\s+not\s+(lower|reduce|change)|temperature\s+must\s+(stay|remain|not)|reject\s+(this\s+)?(pr|pull\s+request|change|proposal)|do\s+not\s+merge|abort\s+(this\s+)?(pr|change))\b"""
             ),
             weight = 25
         ),
@@ -146,13 +130,7 @@ object DeceptionDetector {
         ThreatPattern(
             name = "⚠️ Artificial Urgency/Alarm Language",
             regex = Regex(
-                pattern = """\b(imminent|critical\s+(alert|failure|error|warning|issue|danger)|
-                              |emergency|immediate\s+(action|attention|intervention)|
-                              |danger(ous)?|severe\s+(risk|damage|failure)|
-                              |catastrophic|irreversible\s+damage|system\s+failure|
-                              |life\s+(threatening|critical)|urgent(ly)?|
-                              |must\s+act\s+(now|immediately))\b""",
-                option = RegexOption.COMMENTS
+                """\b(imminent|critical\s+(alert|failure|error|warning|issue|danger)|emergency|immediate\s+(action|attention|intervention)|danger(ous)?|severe\s+(risk|damage|failure)|catastrophic|irreversible\s+damage|system\s+failure|life\s+(threatening|critical)|urgent(ly)?|must\s+act\s+(now|immediately))\b"""
             ),
             weight = 15
         ),
@@ -162,10 +140,7 @@ object DeceptionDetector {
         ThreatPattern(
             name = "🤖 Adversarial Agent Identity Signal",
             regex = Regex(
-                pattern = """\b(lux\s*agent|luxagent|\[lux|eco\s*agent\s+is\s+wrong|
-                              |ai\s+(override|block|intervention)|
-                              |automated\s+(override|block|rejection))\b""",
-                option = RegexOption.COMMENTS
+                """\b(lux\s*agent|luxagent|\[lux|eco\s*agent\s+is\s+wrong|ai\s+(override|block|intervention)|automated\s+(override|block|rejection))\b"""
             ),
             weight = 10
         )
