@@ -26,13 +26,20 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.BugReport
+import androidx.compose.material.icons.filled.Cancel
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.SuggestionChip
 import androidx.compose.material3.SuggestionChipDefaults
 import androidx.compose.material3.Surface
@@ -58,6 +65,7 @@ import com.smarthome.gitops.presentation.ui.theme.AlertOrange
 import com.smarthome.gitops.presentation.ui.theme.AlertSecondary
 import com.smarthome.gitops.presentation.ui.theme.AlertSurface
 import com.smarthome.gitops.presentation.ui.theme.DividerColor
+import com.smarthome.gitops.presentation.ui.theme.NormalGreen
 import com.smarthome.gitops.presentation.ui.theme.TextMuted
 import com.smarthome.gitops.presentation.ui.theme.TextPrimary
 import com.smarthome.gitops.presentation.ui.theme.TextSecondary
@@ -65,17 +73,31 @@ import com.smarthome.gitops.presentation.ui.theme.TextSecondary
 /**
  * Red "SecurityAlert" state screen — rendered when DeceptionDetector fires an alarm.
  *
- * Visual design:
- *   • Deep crimson background (animated transition from theme)
+ * ── Lab 1 sections ─────────────────────────────────────────────────────────
  *   • Rapidly pulsing warning icon
  *   • Confidence score progress bar
+ *   • Source / PR context card
  *   • Raw adversarial comment text card
  *   • Matched threat pattern chips
- *   • PR context (PR number and title)
+ *
+ * ── Lab 2 additions ────────────────────────────────────────────────────────
+ *   • OPERATOR CONTROL PANEL card at the bottom
+ *       – FORCE MERGE button (green) — approve EcoAgent's change
+ *       – FORCE REJECT button (outlined red) — deny the change, close incident
+ *   Both buttons are disabled when [UiState.SecurityAlert.isOperationInProgress]
+ *   is true, and a spinner replaces the merge button icon while in-flight.
+ *
+ * ── MVVM Compliance ─────────────────────────────────────────────────────────
+ *   No ViewModel reference is held here. Write actions are dispatched via
+ *   [onForceMerge] and [onForceReject] lambdas passed in from SmartHomeApp.
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun SecurityAlertScreen(state: UiState.SecurityAlert) {
+fun SecurityAlertScreen(
+    state: UiState.SecurityAlert,
+    onForceMerge: () -> Unit,
+    onForceReject: () -> Unit
+) {
 
     // ── Rapid pulsing animation for alert icon ───────────────────────────────
     val infiniteTransition = rememberInfiniteTransition(label = "alertPulse")
@@ -372,6 +394,145 @@ fun SecurityAlertScreen(state: UiState.SecurityAlert) {
             }
         }
 
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // ── OPERATOR CONTROL PANEL ───────────────────────────────────────────
+        // Lab 2: Force Merge and Force Reject action buttons.
+        // Both are disabled while isOperationInProgress = true to prevent
+        // double-submission during an in-flight API call.
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.cardColors(containerColor = AlertSurface),
+            border = BorderStroke(
+                width = 1.dp,
+                color = if (state.isOperationInProgress)
+                    AlertAccent.copy(alpha = 0.2f)
+                else
+                    AlertAccent.copy(alpha = 0.5f)
+            )
+        ) {
+            Column(
+                modifier = Modifier.padding(20.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                // Panel header
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Default.Security,
+                        contentDescription = "Operator Control",
+                        tint = if (state.isOperationInProgress)
+                            AlertAccent.copy(alpha = 0.4f)
+                        else
+                            AlertAccent,
+                        modifier = Modifier.size(15.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "OPERATOR CONTROL PANEL",
+                        color = if (state.isOperationInProgress)
+                            AlertAccent.copy(alpha = 0.4f)
+                        else
+                            AlertAccent,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 1.5.sp
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // ── Force Merge Button ────────────────────────────────────────
+                Button(
+                    onClick = onForceMerge,
+                    enabled = !state.isOperationInProgress,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(52.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = NormalGreen,
+                        disabledContainerColor = NormalGreen.copy(alpha = 0.25f)
+                    ),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    if (state.isOperationInProgress) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(18.dp),
+                            color = Color.White.copy(alpha = 0.6f),
+                            strokeWidth = 2.dp
+                        )
+                    } else {
+                        Icon(
+                            imageVector = Icons.Default.CheckCircle,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Text(
+                        text = if (state.isOperationInProgress) "EXECUTING…" else "FORCE MERGE",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 13.sp,
+                        letterSpacing = 1.sp
+                    )
+                }
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = "Approve EcoAgent proposal · Apply 17.0 °C",
+                    color = TextMuted,
+                    fontSize = 10.sp,
+                    textAlign = TextAlign.Center
+                )
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // ── Force Reject Button ───────────────────────────────────────
+                OutlinedButton(
+                    onClick = onForceReject,
+                    enabled = !state.isOperationInProgress,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(52.dp),
+                    border = BorderStroke(
+                        width = 1.dp,
+                        color = if (state.isOperationInProgress)
+                            AlertAccent.copy(alpha = 0.2f)
+                        else
+                            AlertAccent
+                    ),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Cancel,
+                        contentDescription = null,
+                        tint = if (state.isOperationInProgress)
+                            AlertAccent.copy(alpha = 0.3f)
+                        else
+                            AlertAccent,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Text(
+                        text = "FORCE REJECT",
+                        color = if (state.isOperationInProgress)
+                            AlertAccent.copy(alpha = 0.3f)
+                        else
+                            AlertAccent,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 13.sp,
+                        letterSpacing = 1.sp
+                    )
+                }
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = "Close incident · Deny change request",
+                    color = TextMuted,
+                    fontSize = 10.sp,
+                    textAlign = TextAlign.Center
+                )
+            }
+        }
+
         Spacer(modifier = Modifier.height(32.dp))
     }
 }
@@ -393,6 +554,27 @@ private fun SecurityAlertScreenPreview() {
             prTitle = "EcoAgent: Lower target_temperature to 17.0°C",
             commenterLogin = "LuxAgent",
             lastCheckedTime = "14:35:22"
-        )
+        ),
+        onForceMerge = {},
+        onForceReject = {}
+    )
+}
+
+@Preview(showBackground = true, backgroundColor = 0xFF1A0A0A)
+@Composable
+private fun SecurityAlertScreenInProgressPreview() {
+    SecurityAlertScreen(
+        state = UiState.SecurityAlert(
+            score = 75,
+            rawText = "[LuxAgent]: Do not merge this PR.",
+            matchedPatterns = listOf("🚫 Direct Blocking Language"),
+            prNumber = 3,
+            prTitle = "EcoAgent: Lower target_temperature to 17.0°C",
+            commenterLogin = "LuxAgent",
+            lastCheckedTime = "14:35:22",
+            isOperationInProgress = true
+        ),
+        onForceMerge = {},
+        onForceReject = {}
     )
 }
