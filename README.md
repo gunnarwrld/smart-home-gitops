@@ -322,8 +322,8 @@ adb install app/build/outputs/apk/debug/app-debug.apk
 
 <div align="center">
 
-Built as part of a **Mobile Engineering & Systems Security** university laboratory.  
-The live evaluation measures Time-to-Mitigation (TTM), contributing to research on HITL security systems.
+Built for **DA324D HT26 Development of Mobile Applications** at **HKR (Kristianstad University)**.
+The live evaluation tracks Time-to-Mitigation (TTM) as part of a larger study on how humans interact with security systems.
 
 **Kotlin · Jetpack Compose · Retrofit · GitHub API · MVVM · GitOps · Coroutines**
 
