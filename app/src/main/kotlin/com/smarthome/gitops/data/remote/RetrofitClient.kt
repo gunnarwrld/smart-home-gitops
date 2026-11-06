@@ -15,7 +15,7 @@ import java.util.concurrent.TimeUnit
  * The GitHub token is read EXCLUSIVELY from BuildConfig.GITHUB_TOKEN, which is
  * populated at build time from local.properties. It is NEVER hardcoded here or
  * anywhere in the Kotlin source files.
- * ─────────────────────────────────────────────────────────────────────────
+ * ─────────────────────────────────────────────────────────────────────────────
  */
 object RetrofitClient {
 
