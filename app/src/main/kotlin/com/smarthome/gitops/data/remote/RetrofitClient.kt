@@ -15,7 +15,7 @@ import java.util.concurrent.TimeUnit
  * The GitHub token is read EXCLUSIVELY from BuildConfig.GITHUB_TOKEN, which is
  * populated at build time from local.properties. It is NEVER hardcoded here or
  * anywhere in the Kotlin source files.
- * ─────────────────────────────────────────────────────────────────────────────
+ * ─────────────────────────────────────────────────────────────────────────
  */
 object RetrofitClient {
 
@@ -41,6 +41,9 @@ object RetrofitClient {
      * Set to BODY for development; reduce to NONE for production.
      */
     private val loggingInterceptor = HttpLoggingInterceptor().apply {
+        // The auth interceptor runs first, so this logger sees the Authorization header.
+        // Redact it so debug Logcat output never contains the token.
+        redactHeader("Authorization")
         level = if (BuildConfig.DEBUG) {
             HttpLoggingInterceptor.Level.BODY
         } else {

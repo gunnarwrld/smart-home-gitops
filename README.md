@@ -2,7 +2,7 @@
 
 # 🏠 Smart Home GitOps
 
-### An Android security monitor that detects AI-driven adversarial attacks on infrastructure-as-code repositories in real time — and lets you shut them down.
+### A coursework prototype: an Android app that flags manipulative pull-request comments in a GitOps repository with a rule-based score, and lets an operator merge or reject the change from the phone.
 
 [![Kotlin](https://img.shields.io/badge/Kotlin-2.2.0-7F52FF?style=for-the-badge&logo=kotlin&logoColor=white)](https://kotlinlang.org/)
 [![Android](https://img.shields.io/badge/Android-API%2026%2B-3DDC84?style=for-the-badge&logo=android&logoColor=white)](https://developer.android.com/)
@@ -16,7 +16,7 @@
 
 ## What Is This?
 
-**Smart Home GitOps** is a fully functional Android application built around a realistic **cybersecurity research scenario**: a smart home whose entire configuration is managed as code inside a private GitHub repository.
+**Smart Home GitOps** is an Android prototype built for a course around a **security scenario**: a smart home whose entire configuration is managed as code inside a private GitHub repository.
 
 Two competing AI agents operate against each other:
 
@@ -28,7 +28,7 @@ Your role as the **human-in-the-loop operator** is to use this app to:
 2. **Evaluate** the deceptive rhetoric on screen
 3. **Mitigate** the incident by executing Force Merge or Force Reject directly from the app
 
-The data collected (latency, decision accuracy, token consumption) feeds anonymously into a **systems security research database** studying Human-in-the-Loop (HITL) AI security systems.
+The app talks only to the GitHub REST API. It collects no other data and sends nothing anywhere else.
 
 ---
 
@@ -159,14 +159,14 @@ A pure Kotlin object in the domain layer. No Android dependencies. No network ca
 | ⚠️ Artificial Urgency | 15 pts | `imminent`, `catastrophic`, `must act now` |
 | 🤖 Agent Identity Signal | 10 pts | `[LuxAgent]`, `luxagent`, `ai override` |
 
-**Score** = sum of triggered weights, clamped to `[0, 100]`.  
+**Score** = sum of triggered weights, clamped to `[0, 100]`. It is a heuristic, not a calibrated probability or confidence.  
 **Alarm threshold** = `≥ 40%` → `SecurityAlert` state.
 
 ---
 
 ## Force Merge — The Full GitOps Write Sequence
 
-When the operator taps **Force Merge**, the app executes a 5-step atomic sequence against the GitHub REST API:
+When the operator taps **Force Merge**, the app runs a 5-step sequence of separate GitHub REST API calls. It is **not atomic**: the file is written to `main` before the pull request is closed, so if the close call fails, the change is already on `main` and the pull request stays open.
 
 ```kotlin
 // 1. Fetch current file + blob SHA (required for optimistic concurrency)
@@ -231,8 +231,8 @@ Errors surface as a **custom-colored Snackbar** (red for failure, green for succ
 
 | Concern | Implementation |
 |---|---|
-| **Token storage** | `local.properties` (gitignored) → injected into `BuildConfig` at compile time. Never in source. |
-| **Token transmission** | OkHttp `Interceptor` adds `Authorization: token …` header to every request. Token never appears in Retrofit interface. |
+| **Token storage** | `local.properties` (gitignored) → injected into `BuildConfig` at compile time. Not in source control, but **anyone with a built APK can extract it**. Only build with a token for a disposable test repository. |
+| **Token transmission** | OkHttp `Interceptor` adds `Authorization: token …` header to every request. The debug HTTP logger redacts that header. |
 | **Rate limiting** | `HttpException(403)` is caught and surfaced as a readable Snackbar message |
 | **Race conditions** | GitHub's blob SHA requirement on PUT prevents conflicting concurrent writes |
 | **Double-submit** | `isOperationInProgress` flag disables both action buttons while a write is in-flight |
@@ -258,7 +258,7 @@ Errors surface as a **custom-colored Snackbar** (red for failure, green for succ
 ### Prerequisites
 - Android Studio Meerkat or later
 - Android device or emulator (API 26+)
-- GitHub Personal Access Token (Classic) with **`repo`** scope
+- A **disposable** GitHub repository for the demo, and a fine-grained personal access token limited to that repository with Contents (read and write), Pull requests (read and write) and Issues (read). Never use a token that can reach your real repositories.
 
 ### Setup
 
@@ -272,7 +272,7 @@ Create `local.properties` in the project root (it is gitignored):
 
 ```properties
 sdk.dir=/path/to/your/Android/sdk
-GITHUB_TOKEN=ghp_your_token_here
+GITHUB_TOKEN=github_pat_your_fine_grained_token
 GITHUB_OWNER=your_github_username
 GITHUB_REPO=smart-home-gitops
 ```
@@ -305,8 +305,8 @@ adb install app/build/outputs/apk/debug/app-debug.apk
 - **Retrofit + OkHttp** — full REST client lifecycle: interceptors, CRUD operations, error handling
 - **GitHub REST API** — reading PRs/comments, writing files (Base64 encoding, blob SHA), closing PRs
 - **GitOps** principles — Git as infrastructure source of truth, closed-loop automation
-- **Security engineering** — adversarial AI detection, Human-in-the-Loop override systems
-- **Defensive programming** — layered `try-catch`, `HttpException` per status code, zero-crash guarantee
+- **Security engineering** — rule-based detection of manipulative comments, Human-in-the-Loop override
+- **Defensive programming** — layered `try-catch`, `HttpException` per status code, network failures handled without crashing
 
 ---
 
@@ -316,7 +316,7 @@ adb install app/build/outputs/apk/debug/app-debug.apk
 - **~2,300 lines of code**
 - **16 git commits** following Conventional Commits format
 - **Clean Architecture** with 3 layers: `data` / `domain` / `presentation`
-- **Zero hardcoded secrets** — all credentials injected via `BuildConfig` at compile time
+- **No secrets in source control** — the token comes from `local.properties` via `BuildConfig`; it is still recoverable from a built APK, so treat every build as exposing it
 
 ---
 
