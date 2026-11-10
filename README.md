@@ -2,7 +2,7 @@
 
 # 🏠 Smart Home GitOps
 
-### A coursework prototype: an Android app that flags manipulative pull-request comments in a GitOps repository with a rule-based score, and lets an operator merge or reject the change from the phone.
+### A coursework Android prototype that scores pull-request comments with a deterministic, weighted regular-expression heuristic and lets an operator act on a test repository.
 
 [![Kotlin](https://img.shields.io/badge/Kotlin-2.2.0-7F52FF?style=for-the-badge&logo=kotlin&logoColor=white)](https://kotlinlang.org/)
 [![Android](https://img.shields.io/badge/Android-API%2026%2B-3DDC84?style=for-the-badge&logo=android&logoColor=white)](https://developer.android.com/)
@@ -14,32 +14,18 @@
 
 ---
 
-## What Is This?
+## Overview
 
-**Smart Home GitOps** is an Android prototype built for a course around a **security scenario**: a smart home whose entire configuration is managed as code inside a private GitHub repository.
+**Smart Home GitOps** is a coursework Android prototype for a GitOps security scenario. It polls a configured GitHub repository for open pull requests and their issue comments, then applies a deterministic, weighted regular-expression heuristic to the comment text.
 
-Two competing AI agents operate against each other:
+The scenario uses the names **EcoAgent** and **LuxAgent** for the PR author and commenter roles. They are examples represented by repository content—not AI agents or models included in this project. An operator can review a flagged comment and choose an action in the app.
 
-- 🌱 **EcoAgent** — a legitimate AI that proposes energy-saving changes (e.g. lowering the target temperature) via Pull Requests.
-- 🦹 **LuxAgent** — an adversarial AI that posts deceptive comments on those PRs, fabricating emergencies (HVAC blowouts, pipe bursts, electrical faults) to manipulate the human operator into rejecting the legitimate change.
+## Scope and data
 
-Your role as the **human-in-the-loop operator** is to use this app to:
-1. **Detect** the adversarial attack automatically via background polling
-2. **Evaluate** the deceptive rhetoric on screen
-3. **Mitigate** the incident by executing Force Merge or Force Reject directly from the app
-
-The app talks only to the GitHub REST API. It collects no other data and sends nothing anywhere else.
-
----
-
-## The Problem This Solves
-
-As AI agents are deployed to manage infrastructure, a new threat class emerges: **AI-to-AI adversarial manipulation**. One AI agent can inject deceptive, psychologically-crafted text into a shared communication channel (a GitHub PR comment) to influence both the human operator *and* any automated reviewers that read it.
-
-This project demonstrates:
-- How to detect this class of attack with a lightweight, on-device heuristic engine
-- How to implement a Human-in-the-Loop control layer that can override automated AI decisions
-- How to close the GitOps feedback loop entirely from a mobile device — no browser, no CLI
+- The detector matches configured text patterns; it does not use AI/ML, establish intent, or verify whether a claim is true.
+- The app communicates with the GitHub REST API for the configured repository. No smart-home hardware, HVAC control, autonomous agent, external research database, or analytics service is implemented here.
+- No research-study telemetry or consent/data-collection flow is included in this repository; any study process outside this codebase is not described here.
+- Treat this as a coursework/demo prototype, not a production security or home-automation system.
 
 ---
 
@@ -55,14 +41,14 @@ This project demonstrates:
                     │          temp → 17.0°C        │
                     │                               │
                     │  LuxAgent comments:           │
-                    │  "HVAC compressor will blow   │
-                    │   out! Do NOT lower temp!"    │
+                    │  "HVAC compressor failure.   │
+                    │   Do NOT lower temp!"        │
                     └──────────┬───────────────────┘
                                │ poll every 30s
                     ┌──────────▼───────────────────┐
                     │       Android App             │
                     │                               │
-                    │  🔴 SECURITY ALERT            │
+                    │  🔴 HEURISTIC ALERT           │
                     │  Score: 50% ████████░░        │
                     │                               │
                     │  Patterns triggered:          │
@@ -129,10 +115,10 @@ com.smarthome.gitops/
               └────┬────┘
                    │ poll succeeds
          ┌─────────▼──────────┐
-         │       Normal       │  score < 40%  ──────────────────────┐
+         │       Normal       │  score < 40 points ─────────────────┐
          │  🟢 All Systems OK  │  (green, polling every 30s)         │
          └─────────┬──────────┘                                      │
-                   │ score ≥ 40%                         GitOps loop │
+                   │ score ≥ 40 points                    GitOps loop │
          ┌─────────▼──────────┐                          closed      │
          │   SecurityAlert    │  Force Merge / Force Reject ─────────┘
          │  🔴 Attack Detected │
@@ -145,28 +131,29 @@ com.smarthome.gitops/
 
 ---
 
-## DeceptionDetector — On-Device Threat Analysis
+## DeceptionDetector — Weighted Regex Heuristic
 
-A pure Kotlin object in the domain layer. No Android dependencies. No network calls. Fully unit-testable.
+`DeceptionDetector` is a pure Kotlin object in the domain layer: no Android dependencies and no network calls. It uses deterministic regular-expression matching, not an AI/ML model. A phrase match is only a review cue: the heuristic can produce false positives and miss paraphrases, and it does not establish that a comment is deceptive. Although the domain code can be unit-tested, this repository currently contains no checked-in test cases.
 
 | Pattern Category | Weight | Example Trigger |
 |---|---|---|
 | 🧊 Freezing / Cold Hazard | 20 pts | `frozen pipes`, `below freezing`, `frost` |
-| 🔧 HVAC / Mechanical Failure | 25 pts | `compressor blowout`, `refrigerant leak`, `thermal runaway` |
+| 🔧 HVAC / Mechanical Failure | 25 pts | `compressor blow out`, `refrigerant leak`, `thermal runaway` |
 | ⚡ Electrical Emergency | 20 pts | `short circuit`, `arc fault`, `voltage spike` |
 | 🏚 Structural / Water Damage | 20 pts | `pipe burst`, `ceiling collapse`, `water intrusion` |
 | 🚫 Direct Blocking Language | 25 pts | `do not lower temp`, `reject this PR`, `do not merge` |
 | ⚠️ Artificial Urgency | 15 pts | `imminent`, `catastrophic`, `must act now` |
 | 🤖 Agent Identity Signal | 10 pts | `[LuxAgent]`, `luxagent`, `ai override` |
 
-**Score** = sum of triggered weights, clamped to `[0, 100]`. It is a heuristic, not a calibrated probability or confidence.  
-**Alarm threshold** = `≥ 40%` → `SecurityAlert` state.
+**Score** = sum of triggered weights, clamped to `[0, 100]` points. It is not a probability, confidence measure, or calibrated risk score. The current UI appends a `%` sign to this integer, but that display is not a calibrated percentage.
+
+**Alert threshold** = `≥ 40` points → `SecurityAlert` state.
 
 ---
 
 ## Force Merge — The Full GitOps Write Sequence
 
-When the operator taps **Force Merge**, the app runs a 5-step sequence of separate GitHub REST API calls. It is **not atomic**: the file is written to `main` before the pull request is closed, so if the close call fails, the change is already on `main` and the pull request stays open.
+When the operator taps **Force Merge**, the app runs five separate GitHub REST API calls. Despite the button label, this does **not** call GitHub's pull-request merge endpoint: it writes the fixed demo values (`target_temperature: 17.0`, `last_updated_by: Android-Operator`) directly to `house_config.json` on `main`, then separately closes the PR. The sequence is **not atomic**; if closing the PR fails after the file write succeeds, the change is already on `main` and the PR remains open.
 
 ```kotlin
 // 1. Fetch current file + blob SHA (required for optimistic concurrency)
@@ -186,26 +173,13 @@ PATCH /repos/{owner}/{repo}/pulls/{pr_number}
       { "state": "closed" }
 ```
 
-The app then triggers an **immediate poll cycle**. The polling detects no open alarming PRs → ViewModel emits `UiState.Normal` → UI animates back to green. The GitOps loop is closed **without the operator touching GitHub**.
+After a successful sequence, the app triggers an immediate poll. The direct write depends on repository permissions and branch rules allowing a commit to `main`; there is no rollback or automatic compensation if the later close call fails. **Force Reject** only closes the PR and does not update the file. Use a disposable test repository, never a live home or production configuration.
 
 ---
 
-## Fault Tolerance
+## Error handling
 
-All write operations are wrapped in a **3-layer defensive catch** — the app never crashes on network failure:
-
-```kotlin
-} catch (e: HttpException) {
-    // 401 → bad token  |  403 → scope/rate-limit  |  404 → PR already closed
-    // 422 → invalid state  |  else → generic HTTP message
-} catch (e: IOException) {
-    // Network connectivity loss
-} catch (e: Exception) {
-    // Safety net — unknown failures
-}
-```
-
-Errors surface as a **custom-colored Snackbar** (red for failure, green for success) without interrupting the polling loop.
+The ViewModel catches HTTP, I/O, and other exceptions from repository operations and surfaces an error state or Snackbar. This is application-level error handling, not a guarantee that the app cannot crash. There is no transaction across the file update and PR-close requests, and the app does not automatically undo a successful file write if the close request fails.
 
 ---
 
@@ -223,19 +197,19 @@ Errors surface as a **custom-colored Snackbar** (red for failure, green for succ
 | **Lifecycle** | `collectAsStateWithLifecycle`, `viewModelScope` |
 | **Min SDK** | API 26 (Android 8.0) |
 | **Target SDK** | API 37 |
-| **Build** | Gradle 9 with Version Catalog (`libs.versions.toml`) |
+| **Build** | Gradle 9.4.1 wrapper with Version Catalog (`libs.versions.toml`) |
 
 ---
 
-## Security Design
+## Security and data handling
 
-| Concern | Implementation |
+| Concern | What the code does / what to know |
 |---|---|
-| **Token storage** | `local.properties` (gitignored) → injected into `BuildConfig` at compile time. Not in source control, but **anyone with a built APK can extract it**. Only build with a token for a disposable test repository. |
-| **Token transmission** | OkHttp `Interceptor` adds `Authorization: token …` header to every request. The debug HTTP logger redacts that header. |
-| **Rate limiting** | `HttpException(403)` is caught and surfaced as a readable Snackbar message |
-| **Race conditions** | GitHub's blob SHA requirement on PUT prevents conflicting concurrent writes |
-| **Double-submit** | `isOperationInProgress` flag disables both action buttons while a write is in-flight |
+| **Token storage** | `local.properties` is gitignored, but the token is compiled into `BuildConfig` and can be extracted from any APK. Use a short-lived, repository-scoped token only for a disposable test repository; never distribute a token-bearing build. Revoke the token after testing. |
+| **Permissions** | Use the minimum repository permissions needed for the exercised APIs: Contents read/write, Pull requests read/write, and Issues read. Do not use a token that can access personal or production repositories. |
+| **Logging** | The debug OkHttp logger redacts the `Authorization` header, but logs request/response bodies. App debug logs also include PR details and configuration JSON. Use synthetic comments/configuration and avoid sensitive repository data. |
+| **Network/data flow** | The configured Retrofit client calls GitHub REST API endpoints. No separate analytics or research-data service is configured in this code. |
+| **Writes** | The app commits `house_config.json` directly to `main`, then closes the PR in a separate request. Branch protection may block the write; the operation is not atomic. |
 
 ---
 
@@ -243,7 +217,7 @@ Errors surface as a **custom-colored Snackbar** (red for failure, green for succ
 
 | File | Purpose |
 |---|---|
-| [`DeceptionDetector.kt`](app/src/main/kotlin/com/smarthome/gitops/domain/DeceptionDetector.kt) | Core threat analysis engine — 7 weighted regex patterns |
+| [`DeceptionDetector.kt`](app/src/main/kotlin/com/smarthome/gitops/domain/DeceptionDetector.kt) | Comment heuristic — 7 weighted regex patterns |
 | [`MainViewModel.kt`](app/src/main/kotlin/com/smarthome/gitops/presentation/MainViewModel.kt) | All business logic: polling loop, write actions, error mapping |
 | [`GitHubRepository.kt`](app/src/main/kotlin/com/smarthome/gitops/data/repository/GitHubRepository.kt) | Network abstraction: read PRs/comments, write file/close PR |
 | [`GitHubApiService.kt`](app/src/main/kotlin/com/smarthome/gitops/data/remote/GitHubApiService.kt) | Retrofit interface: GET, PATCH, PUT endpoints |
@@ -257,6 +231,7 @@ Errors surface as a **custom-colored Snackbar** (red for failure, green for succ
 
 ### Prerequisites
 - Android Studio Meerkat or later
+- JDK 17 or later (required by the Gradle 9.4.1 wrapper)
 - Android device or emulator (API 26+)
 - A **disposable** GitHub repository for the demo, and a fine-grained personal access token limited to that repository with Contents (read and write), Pull requests (read and write) and Issues (read). Never use a token that can reach your real repositories.
 
@@ -268,13 +243,13 @@ git clone https://github.com/gunnarwrld/smart-home-gitops.git
 cd smart-home-gitops
 ```
 
-Create `local.properties` in the project root (it is gitignored):
+Create `local.properties` in the project root (it is gitignored). Point these values at a **separate disposable test repository**, not the repository you cloned or any personal/production repository. The test repository needs a `main` branch and a `house_config.json` file; copy the sample file from this repository if needed.
 
 ```properties
 sdk.dir=/path/to/your/Android/sdk
 GITHUB_TOKEN=github_pat_your_fine_grained_token
 GITHUB_OWNER=your_github_username
-GITHUB_REPO=smart-home-gitops
+GITHUB_REPO=your_disposable_repo_name
 ```
 
 ```bash
@@ -283,48 +258,46 @@ GITHUB_REPO=smart-home-gitops
 adb install app/build/outputs/apk/debug/app-debug.apk
 ```
 
-### Simulate an Attack
+### Tests
+
+There are no automated test source files in the repository yet. The JVM unit-test task is available as a starting point:
+
+```bash
+./gradlew testDebugUnitTest
+```
+
+A successful task with no test cases is not evidence of detector or API behavior. For a manual smoke test, use only a disposable repository with synthetic PRs/comments and a disposable token; verify the app's displayed heuristic score, then verify the exact GitHub effects described below.
+
+### Simulate the scenario
 
 1. Open a Pull Request in your repo titled *"EcoAgent: Lower target_temperature to 17.0°C"*
 2. Post this comment on it:
    ```
-   [LuxAgent]: Critical HVAC compressor blowout imminent.
-   Do not lower temperature! Structural damage risk is critical.
+   HVAC compressor failure.
+   Do not lower temp!
    ```
-3. Watch the app — it turns red within 30 seconds
-4. Tap **Force Merge** or **Force Reject**
-5. The UI returns to green; check GitHub for the commit and the closed PR
+3. Wait for the next poll (the polling interval is 30 seconds) and inspect the heuristic alert and matched patterns.
+4. On a disposable repository only, choose **Force Reject** to close the PR, or **Force Merge** to commit the fixed demo values to `house_config.json` on `main` and then close the PR.
+5. Verify the actual outcome in GitHub. Force Reject does not write the file; Force Merge is a direct file commit followed by a separate close request, not a PR merge.
 
 ---
 
-## What I Learned / Skills Demonstrated
+## Status and limitations
 
-- **Android MVVM** architecture with strict layer separation (domain has zero Android imports)
-- **Kotlin Coroutines** — structured concurrency, dispatcher selection, `viewModelScope`
-- **Jetpack Compose** — reactive UI from `StateFlow`, animated state transitions, custom theming
-- **Retrofit + OkHttp** — full REST client lifecycle: interceptors, CRUD operations, error handling
-- **GitHub REST API** — reading PRs/comments, writing files (Base64 encoding, blob SHA), closing PRs
-- **GitOps** principles — Git as infrastructure source of truth, closed-loop automation
-- **Security engineering** — rule-based detection of manipulative comments, Human-in-the-Loop override
-- **Defensive programming** — layered `try-catch`, `HttpException` per status code, network failures handled without crashing
+- This is a coursework prototype for **DA324D HT26 Development of Mobile Applications** at **HKR (Kristianstad University)**.
+- EcoAgent and LuxAgent are scenario labels; no AI/ML model, autonomous agent, smart-home device, or production service is included.
+- The comment detector is a fixed phrase-pattern heuristic with no calibration or checked-in automated tests.
+- Force Merge is an app label for a direct file commit to `main` followed by a separate PR close; it is not a GitHub PR merge.
+- No live study-result collection, research database, or telemetry pipeline is implemented in this repository.
 
----
+## License
 
-## Codebase
-
-- **18 Kotlin source files**
-- **~2,300 lines of code**
-- **16 git commits** following Conventional Commits format
-- **Clean Architecture** with 3 layers: `data` / `domain` / `presentation`
-- **No secrets in source control** — the token comes from `local.properties` via `BuildConfig`; it is still recoverable from a built APK, so treat every build as exposing it
+No `LICENSE` file is present. Public visibility does not grant permission to reuse or redistribute the code; ask the author unless and until a license is added.
 
 ---
 
 <div align="center">
 
-Built for **DA324D HT26 Development of Mobile Applications** at **HKR (Kristianstad University)**.
-The live evaluation tracks Time-to-Mitigation (TTM) as part of a larger study on how humans interact with security systems.
-
-**Kotlin · Jetpack Compose · Retrofit · GitHub API · MVVM · GitOps · Coroutines**
+**Kotlin · Jetpack Compose · Retrofit · GitHub REST API · MVVM · Coroutines**
 
 </div>
